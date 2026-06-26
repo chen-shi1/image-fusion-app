@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>多图像融合系统</title>
+<script src="https://modao.cc/agent-py/static/source/js/tailwindcss.js"></script>
+<script src="https://modao.cc/agent-py/static/source/js/iconify-icon.min.js"></script>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', 'Microsoft YaHei', sans-serif; background: #020617; color: #f1f5f9; overflow: hidden; }
+    .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
+    .micro-img-placeholder { background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); position: relative; overflow: hidden; }
+    .fusion-glow { box-shadow: 0 0 20px rgba(99, 102, 241, 0.2); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    .hidden { display: none !important; }
+    .flex { display: flex !important; }
+    .absolute { position: absolute; }
+    .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+    .z-10 { z-index: 10; }
+</style>
+</head>
+<body class="h-screen flex items-center justify-center p-4">
+
+<div class="w-[1440px] h-[900px] glass-panel rounded-2xl shadow-2xl flex flex-col overflow-hidden relative border border-slate-800">
+
+<!-- 顶部导航 -->
+<header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/80">
+    <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <iconify-icon class="text-2xl text-white" icon="material-symbols:biotech-rounded"></iconify-icon>
+        </div>
+        <div>
+            <h1 class="text-lg font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                多图像融合系统<span class="text-xs font-normal text-slate-500 ml-2">v1.0.1</span>
+            </h1>
+        </div>
+    </div>
+    <div class="flex items-center gap-6">
+        <div class="flex items-center gap-4 text-slate-400">
+            <button class="hover:text-white transition-colors flex items-center gap-1" onclick="showToast('📖 支持 PNG、JPEG、TIFF 格式，最多10张')">
+                <iconify-icon icon="material-symbols:help-outline"></iconify-icon>
+                <span class="text-sm">帮助</span>
+            </button>
+            <button class="hover:text-white transition-colors flex items-center gap-1" id="btn-logout" onclick="logoutUser()" style="display:none;">
+                <iconify-icon icon="material-symbols:logout-rounded"></iconify-icon>
+                <span class="text-sm">退出</span>
+            </button>
+            <button class="hover:text-white transition-colors flex items-center gap-1" id="btn-login" onclick="openAuthModal()">
+                <iconify-icon icon="material-symbols:person-outline"></iconify-icon>
+                <span class="text-sm" id="header-login-text">登录</span>
+            </button>
+        </div>
+        <div class="h-6 w-px bg-slate-800"></div>
+        <div class="flex items-center gap-3">
+            <div class="text-right">
+                <p class="text-xs text-slate-300 font-medium" id="header-username">未登录</p>
+                <p class="text-[10px] text-slate-500" id="header-status">请先登录</p>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center">
+                <iconify-icon class="text-slate-300" icon="material-symbols:person"></iconify-icon>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- 工具栏 -->
+<div class="h-16 px-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/40">
+    <div class="flex items-center gap-3">
+        <button class="px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700" id="btn-import" onclick="importImages()" disabled>
+            <iconify-icon icon="material-symbols:upload-file-rounded"></iconify-icon>
+            导入图像
+        </button>
+        <button class="px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700" id="btn-fusion" onclick="startFusion()" disabled>
+            <iconify-icon icon="material-symbols:auto-fix-high-rounded"></iconify-icon>
+            执行融合
+        </button>
+        <button class="px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700" id="btn-export" onclick="exportResult()" disabled>
+            <iconify-icon icon="material-symbols:download-rounded"></iconify-icon>
+            导出结果
+        </button>
+        <button class="px-4 py-2 bg-transparent hover:bg-slate-800 text-slate-400 rounded-lg flex items-center gap-2 transition-all font-medium border border-slate-700/50" onclick="resetSystem()">
+            <iconify-icon icon="material-symbols:refresh-rounded"></iconify-icon>
+            重置
+        </button>
+    </div>
+    <div class="flex items-center gap-4">
+        <div class="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-slate-500" id="status-dot"></div>
+            <span class="text-xs text-slate-400 font-medium" id="status-text">等待登录</span>
+        </div>
+    </div>
+</div>
+
+<!-- 主内容 -->
+<main class="flex-1 flex overflow-hidden">
+    <aside class="w-96 border-r border-slate-800 flex flex-col bg-slate-900/20">
+        <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+            <h2 class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                <iconify-icon class="text-indigo-400" icon="material-symbols:photo-library-rounded"></iconify-icon>
+                原始图像列表
+            </h2>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400" id="img-count">0 / 10</span>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3" id="image-list">
+            <div id="image-items" class="space-y-3"></div>
+        </div>
+        <div class="p-4 border-t border-slate-800 grid grid-cols-2 gap-2">
+            <button class="py-2 rounded bg-slate-800 text-slate-500 text-xs flex items-center justify-center gap-1 transition-colors cursor-not-allowed" id="btn-add-image" onclick="importImages()" disabled>
+                <iconify-icon icon="material-symbols:add-rounded"></iconify-icon>
+                添加图像
+            </button>
+            <button class="py-2 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 flex items-center justify-center gap-1 transition-colors" onclick="removeSelected()">
+                <iconify-icon icon="material-symbols:delete-outline-rounded"></iconify-icon>
+                移除选中
+            </button>
+        </div>
+    </aside>
+
+    <section class="flex-1 flex flex-col bg-slate-950/50">
+        <div class="flex-1 p-6 flex flex-col gap-4 min-h-0">
+            <div class="flex items-center justify-between flex-shrink-0">
+                <h2 class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <iconify-icon class="text-cyan-400" icon="material-symbols:compare-arrows-rounded"></iconify-icon>
+                    融合结果对比
+                </h2>
+            </div>
+            <div class="flex-1 grid grid-cols-2 gap-4 relative min-h-[200px]">
+                <!-- 原始图像预览 -->
+                <div class="flex flex-col gap-2 group min-h-0">
+                    <div class="flex-1 rounded-xl border border-slate-800 micro-img-placeholder flex items-center justify-center relative min-h-[150px] overflow-hidden" id="preview-raw-container">
+                        <div class="w-full h-full flex flex-col items-center justify-center" id="preview-raw-content">
+                            <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon>
+                            <p class="text-xs text-slate-700">请登录后导入图像</p>
+                        </div>
+                        <div class="absolute top-2 left-2 px-2 py-1 bg-slate-900/80 backdrop-blur rounded text-[10px] text-slate-400 border border-slate-700">原始图像预览</div>
+                    </div>
+                    <div class="flex items-center justify-between px-1 py-2 bg-slate-900/30 rounded-lg border border-slate-800">
+                        <span class="text-xs text-slate-500 italic truncate max-w-[60%]" id="raw-name">未选中图像</span>
+                        <span class="text-[10px] text-slate-600 font-mono flex-shrink-0" id="raw-dim">-- x -- px</span>
+                    </div>
+                </div>
+
+                <!-- 融合结果预览 -->
+                <div class="flex flex-col gap-2 group min-h-0">
+                    <div class="flex-1 rounded-xl border border-slate-800 micro-img-placeholder flex items-center justify-center relative transition-all duration-700 min-h-[150px] overflow-hidden" id="preview-fusion-container">
+                        <!-- 融合内容 - 默认显示等待状态，无遮罩 -->
+                        <div class="w-full h-full flex flex-col items-center justify-center" id="preview-fusion-content">
+                            <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
+                            <p class="text-xs text-slate-700">等待融合处理...</p>
+                        </div>
+                        <div class="absolute top-2 left-2 px-2 py-1 bg-indigo-900/40 backdrop-blur rounded text-[10px] text-indigo-300 border border-indigo-500/30">融合增强结果</div>
+                        <!-- 进度条 - 融合时显示 -->
+                        <div class="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center hidden z-10" id="fusion-loader">
+                            <div class="w-48 h-1 bg-slate-800 rounded-full overflow-hidden mb-4">
+                                <div class="w-0 h-full bg-indigo-500 transition-all duration-300" id="progress-bar"></div>
+                            </div>
+                            <p class="text-xs text-indigo-400 animate-pulse">正在执行后端融合算法...</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between px-1 py-2 bg-slate-900/30 rounded-lg border border-slate-800">
+                        <span class="text-xs text-slate-500 italic truncate max-w-[60%]" id="fusion-name">等待融合...</span>
+                        <span class="text-[10px] text-slate-600 font-mono flex-shrink-0">2048 x 2048 px</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 评价指标 -->
+        <div class="p-6 border-t border-slate-800 bg-slate-900/30 min-h-[160px] flex flex-col">
+            <h2 class="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2 flex-shrink-0">
+                <iconify-icon class="text-purple-400" icon="material-symbols:analytics-outline-rounded"></iconify-icon>
+                融合质量评估 (QA Metrics)
+            </h2>
+            <div class="flex-1 grid grid-cols-5 gap-4 min-h-0" id="metrics-grid">
+                <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/50 flex flex-col gap-1 transition-all hover:border-indigo-500/50 group">
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">SSIM</span>
+                    <div><span class="metric-val text-xl font-bold text-slate-300 group-hover:text-indigo-400 transition-colors">--</span></div>
+                    <p class="text-[9px] text-slate-600">结构相似性指数 (0-1)</p>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/50 flex flex-col gap-1 transition-all hover:border-indigo-500/50 group">
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">MI</span>
+                    <div><span class="metric-val text-xl font-bold text-slate-300 group-hover:text-indigo-400 transition-colors">--</span></div>
+                    <p class="text-[9px] text-slate-600">互信息</p>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/50 flex flex-col gap-1 transition-all hover:border-indigo-500/50 group">
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">QAB/F</span>
+                    <div><span class="metric-val text-xl font-bold text-slate-300 group-hover:text-indigo-400 transition-colors">--</span></div>
+                    <p class="text-[9px] text-slate-600">边缘信息传递</p>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/50 flex flex-col gap-1 transition-all hover:border-indigo-500/50 group">
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">QM</span>
+                    <div><span class="metric-val text-xl font-bold text-slate-300 group-hover:text-indigo-400 transition-colors">--</span></div>
+                    <p class="text-[9px] text-slate-600">多尺度方案度量</p>
+                </div>
+                <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/50 flex flex-col gap-1 transition-all hover:border-indigo-500/50 group">
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">QCB</span>
+                    <div><span class="metric-val text-xl font-bold text-slate-300 group-hover:text-indigo-400 transition-colors">--</span></div>
+                    <p class="text-[9px] text-slate-600">Chen-Blum 度量</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer class="h-8 border-t border-slate-800 bg-slate-900 flex items-center justify-between px-4 text-[10px] text-slate-500">
+    <div class="flex items-center gap-4">
+        <div class="flex items-center gap-1.5">
+            <div class="w-1.5 h-1.5 rounded-full bg-slate-500" id="footer-status-dot"></div>
+            <span id="footer-status-text">未登录</span>
+        </div>
+    </div>
+    <div><span id="footer-res">分辨率 --</span></div>
+</footer>
+</div>
+
+<input accept="image/*" id="file-input" multiple style="display:none" type="file"/>
+
+<!-- Toast -->
+<div class="fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-red-900/90 border border-red-700/60 rounded-lg text-red-200 text-sm shadow-2xl backdrop-blur-md transition-all duration-400 z-50 opacity-0 translate-y-[-20px] pointer-events-none" id="toast">
+    <div class="flex items-center gap-3">
+        <iconify-icon class="text-xl text-red-400" icon="material-symbols:error-outline-rounded"></iconify-icon>
+        <span id="toast-message">错误信息</span>
+    </div>
+</div>
+
+<!-- 登录模态框 -->
+<div class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] hidden items-center justify-center p-4" id="auth-modal">
+    <div class="w-full max-w-md">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden" id="login-form-container">
+            <div class="p-8">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <iconify-icon class="text-3xl text-white" icon="material-symbols:biotech-rounded"></iconify-icon>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white mb-2">欢迎回来</h2>
+                    <p class="text-sm text-slate-400">请登录以继续使用系统</p>
+                </div>
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-2">用户名 / 手机号码</label>
+                            <input class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" id="login-username" placeholder="请输入用户名或手机号码" type="text"/>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-2">密码</label>
+                            <input class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" id="login-password" placeholder="请输入密码" type="password"/>
+                        </div>
+                        <button class="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-500/30" type="submit">登录</button>
+                    </div>
+                </form>
+                <div class="mt-6 text-center">
+                    <p class="text-sm text-slate-400">
+                        还没有账号？
+                        <button class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors" onclick="switchToRegister()">立即注册</button>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden hidden" id="register-form-container">
+            <div class="p-8">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <iconify-icon class="text-3xl text-white" icon="material-symbols:person-add-rounded"></iconify-icon>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white mb-2">创建账号</h2>
+                    <p class="text-sm text-slate-400">加入我们，开始您的图像融合之旅</p>
+                </div>
+                <form id="register-form" onsubmit="handleRegister(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-2">用户名</label>
+                            <input class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" id="register-username" placeholder="设置用户名（3-20个字符）" type="text"/>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-2">手机号码</label>
+                            <input class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" id="register-phone" placeholder="请输入手机号码（如：13812345678）" type="tel"/>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-2">密码</label>
+                            <input class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" id="register-password" placeholder="设置密码（至少8位，含字母和数字）" type="password"/>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-2">确认密码</label>
+                            <input class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" id="register-confirm" placeholder="再次输入密码" type="password"/>
+                        </div>
+                        <button class="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-500/30" type="submit">立即注册</button>
+                    </div>
+                </form>
+                <div class="mt-6 text-center">
+                    <p class="text-sm text-slate-400">
+                        已有账号？
+                        <button class="text-indigo-400 hover:text-indigo-300 font-medium transition-colors" onclick="switchToLogin()">立即登录</button>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===================== 常量 =====================
+const TARGET_SIZE = 2048;
+const API_URL = 'http://localhost:5000/fusion';
+
+// ===================== 用户系统 =====================
+let users = JSON.parse(localStorage.getItem('fusion_users') || '[]');
+let currentUser = null;
+let isAuthenticated = false;
+
+if (users.length === 0) {
+    users.push({ username: 'admin', password: 'admin123', phone: '13800138000' });
+    localStorage.setItem('fusion_users', JSON.stringify(users));
+}
+
+const savedUser = localStorage.getItem('fusion_current_user');
+if (savedUser) {
+    const user = users.find(u => u.username === savedUser);
+    if (user) {
+        currentUser = user;
+        isAuthenticated = true;
+        updateUIForLogin();
+    }
+}
+
+// ===================== 登录/注册 =====================
+function openAuthModal() {
+    document.getElementById('auth-modal').classList.remove('hidden');
+    document.getElementById('auth-modal').classList.add('flex');
+    switchToLogin();
+}
+
+function closeAuthModal() {
+    document.getElementById('auth-modal').classList.remove('flex');
+    document.getElementById('auth-modal').classList.add('hidden');
+}
+
+function switchToLogin() {
+    document.getElementById('login-form-container').classList.remove('hidden');
+    document.getElementById('register-form-container').classList.add('hidden');
+}
+
+function switchToRegister() {
+    document.getElementById('login-form-container').classList.add('hidden');
+    document.getElementById('register-form-container').classList.remove('hidden');
+}
+
+function handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+
+    const user = users.find(u => (u.username === username || u.phone === username) && u.password === password);
+    if (user) {
+        currentUser = user;
+        isAuthenticated = true;
+        localStorage.setItem('fusion_current_user', user.username);
+        closeAuthModal();
+        updateUIForLogin();
+        showToast('✅ 登录成功！欢迎回来 ' + user.username);
+    } else {
+        showToast('❌ 用户名或密码错误');
+    }
+}
+
+function handleRegister(e) {
+    e.preventDefault();
+    const username = document.getElementById('register-username').value.trim();
+    const phone = document.getElementById('register-phone').value.trim();
+    const password = document.getElementById('register-password').value;
+    const confirm = document.getElementById('register-confirm').value;
+
+    if (username.length < 3) { showToast('❌ 用户名至少3个字符'); return; }
+    if (!/^1[3-9]\d{9}$/.test(phone)) { showToast('❌ 请输入有效的手机号码'); return; }
+    if (password.length < 8) { showToast('❌ 密码至少8位'); return; }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) { showToast('❌ 密码需包含字母和数字'); return; }
+    if (password !== confirm) { showToast('❌ 两次密码不一致'); return; }
+    if (users.find(u => u.username === username)) { showToast('❌ 用户名已存在'); return; }
+    if (users.find(u => u.phone === phone)) { showToast('❌ 手机号已被注册'); return; }
+
+    users.push({ username, password, phone });
+    localStorage.setItem('fusion_users', JSON.stringify(users));
+    showToast('✅ 注册成功！请登录');
+    switchToLogin();
+}
+
+// ===================== 退出登录 =====================
+function logoutUser() {
+    localStorage.removeItem('fusion_current_user');
+    currentUser = null;
+    isAuthenticated = false;
+
+    document.getElementById('header-username').textContent = '未登录';
+    document.getElementById('header-status').textContent = '请先登录';
+    document.getElementById('header-login-text').textContent = '登录';
+    document.getElementById('footer-status-text').textContent = '未登录';
+    document.getElementById('footer-status-dot').className = 'w-1.5 h-1.5 rounded-full bg-slate-500';
+
+    document.getElementById('btn-logout').style.display = 'none';
+    document.getElementById('btn-login').style.display = 'flex';
+
+    document.getElementById('btn-import').disabled = true;
+    document.getElementById('btn-import').className = "px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700";
+    document.getElementById('btn-add-image').disabled = true;
+    document.getElementById('btn-add-image').className = "py-2 rounded bg-slate-800 text-slate-500 text-xs flex items-center justify-center gap-1 transition-colors cursor-not-allowed";
+
+    images = [];
+    selectedIndex = -1;
+    renderImageList();
+    updateStatus();
+
+    // 重置融合预览区 - 无遮罩，只显示等待状态
+    document.getElementById('preview-fusion-content').innerHTML =
+        '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon><p class="text-xs text-slate-700">等待融合处理...</p>';
+    document.getElementById('preview-fusion-container').classList.remove('fusion-glow');
+    document.getElementById('fusion-name').textContent = '等待融合...';
+    // 确保进度条隐藏
+    document.getElementById('fusion-loader').classList.add('hidden');
+    document.querySelectorAll('.metric-val').forEach(el => { el.textContent = '--';
+        el.classList.remove('text-indigo-400'); });
+    document.getElementById('btn-export').disabled = true;
+    document.getElementById('btn-export').className = "px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700";
+    document.getElementById('preview-raw-content').innerHTML =
+        '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请登录后导入图像</p>';
+    document.getElementById('raw-name').textContent = '未选中图像';
+    document.getElementById('raw-dim').textContent = '-- x -- px';
+    document.getElementById('footer-res').textContent = '分辨率 --';
+
+    showToast('✅ 已退出登录');
+    setTimeout(openAuthModal, 500);
+}
+
+function updateUIForLogin() {
+    document.getElementById('header-username').textContent = currentUser.username;
+    document.getElementById('header-status').textContent = '在线';
+    document.getElementById('header-login-text').textContent = currentUser.username;
+    document.getElementById('footer-status-text').textContent = '已登录：' + currentUser.username;
+    document.getElementById('footer-status-dot').className = 'w-1.5 h-1.5 rounded-full bg-green-500';
+
+    document.getElementById('btn-logout').style.display = 'flex';
+    document.getElementById('btn-login').style.display = 'none';
+
+    document.getElementById('btn-import').disabled = false;
+    document.getElementById('btn-import').className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
+    document.getElementById('btn-add-image').disabled = false;
+    document.getElementById('btn-add-image').className = "py-2 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 flex items-center justify-center gap-1 transition-colors";
+
+    document.getElementById('status-text').textContent = '等待导入数据';
+    document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-slate-500';
+    document.getElementById('preview-raw-content').innerHTML =
+        '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请选择左侧图像进行预览</p>';
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toast-message');
+    toastMsg.innerText = message;
+    toast.classList.remove('opacity-0', 'translate-y-[-20px]', 'pointer-events-none');
+    toast.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
+    setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
+        toast.classList.add('opacity-0', 'translate-y-[-20px]', 'pointer-events-none');
+    }, 3000);
+}
+
+// ===================== 图像管理 =====================
+let images = [];
+let selectedIndex = -1;
+let isFused = false;
+
+function importImages() {
+    if (!isAuthenticated) { showToast('请先登录'); return; }
+    document.getElementById('file-input').click();
+}
+
+document.getElementById('file-input').addEventListener('change', async function(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    if (images.length + files.length > 10) {
+        showToast(`最多支持10张图像，当前可导入 ${10 - images.length} 张`);
+        this.value = '';
+        return;
+    }
+
+    const colors = ['from-blue-900 to-indigo-950', 'from-slate-700 to-slate-900', 'from-red-900 to-slate-950',
+        'from-emerald-900 to-slate-950', 'from-amber-900 to-slate-950', 'from-purple-900 to-slate-950',
+        'from-cyan-900 to-slate-950', 'from-rose-900 to-slate-950', 'from-teal-900 to-slate-950', 'from-orange-900 to-slate-950'
+    ];
+
+    document.getElementById('status-text').textContent = `正在处理 ${files.length} 张图像...`;
+    document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+
+    for (let idx = 0; idx < files.length; idx++) {
+        const file = files[idx];
+        try {
+            const dataUrl = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = TARGET_SIZE;
+                        canvas.height = TARGET_SIZE;
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, TARGET_SIZE, TARGET_SIZE);
+                        resolve(canvas.toDataURL('image/png'));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            images.push({
+                id: images.length + 1,
+                name: file.name,
+                size: Math.round(file.size / 1024) + ' KB',
+                color: colors[images.length % colors.length],
+                dataUrl: dataUrl
+            });
+        } catch (e) {
+            console.error('处理失败:', e);
+        }
+    }
+
+    renderImageList();
+    updateStatus();
+    if (images.length > 0) selectImage(0);
+    this.value = '';
+});
+
+function renderImageList() {
+    const imageItems = document.getElementById('image-items');
+    const imgCount = document.getElementById('img-count');
+
+    if (images.length === 0) {
+        imageItems.innerHTML = '<div class="text-center text-slate-500 py-8 text-sm">暂无图像，请导入</div>';
+        imgCount.textContent = '0 / 10';
+        return;
+    }
+
+    imgCount.textContent = `${images.length} / 10`;
+
+    imageItems.innerHTML = images.map((img, idx) => {
+        const isSelected = selectedIndex === idx;
+        return `
+        <div onclick="selectImage(${idx})" class="group cursor-pointer p-2 rounded-xl border ${isSelected ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900/40 hover:border-slate-600'} transition-all">
+            <div class="flex gap-3">
+                <div class="w-16 h-16 rounded-lg bg-gradient-to-br ${img.color} border border-slate-700 overflow-hidden relative flex-shrink-0">
+                    <img src="${img.dataUrl}" class="w-full h-full object-cover opacity-60" alt="缩略图"/>
+                </div>
+                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                    <p class="text-xs font-medium text-slate-200 truncate">${img.name}</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">${img.size} | 2048×2048</p>
+                    <div class="flex items-center gap-2 mt-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        <span class="text-[9px] text-green-500">已缩放</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    }).join('');
+}
+
+function selectImage(index) {
+    selectedIndex = index;
+    renderImageList();
+    const img = images[index];
+    if (img && img.dataUrl) {
+        document.getElementById('preview-raw-content').innerHTML = `<img src="${img.dataUrl}" class="w-full h-full object-contain" alt="${img.name}" />`;
+        document.getElementById('raw-name').textContent = img.name;
+        document.getElementById('raw-dim').textContent = '2048 x 2048 px';
+        document.getElementById('footer-res').textContent = '分辨率 2048 x 2048';
+    }
+}
+
+function removeSelected() {
+    if (selectedIndex === -1 || images.length === 0) return;
+    images.splice(selectedIndex, 1);
+    selectedIndex = -1;
+    renderImageList();
+    updateStatus();
+    document.getElementById('preview-raw-content').innerHTML =
+        '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请选择左侧图像进行预览</p>';
+    document.getElementById('raw-name').textContent = '未选中图像';
+    document.getElementById('raw-dim').textContent = '-- x -- px';
+    if (images.length > 0) selectImage(0);
+}
+
+function updateStatus() {
+    const count = images.length;
+    const statusText = document.getElementById('status-text');
+    const statusDot = document.getElementById('status-dot');
+    const fusionBtn = document.getElementById('btn-fusion');
+
+    if (count === 0) {
+        statusText.textContent = '等待导入数据';
+        statusDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        fusionBtn.disabled = true;
+        fusionBtn.className = "px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700";
+    } else if (count === 1) {
+        statusText.textContent = `已导入${count}张，还需至少1张`;
+        statusDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+        fusionBtn.disabled = true;
+        fusionBtn.className = "px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700";
+    } else {
+        statusText.textContent = `已导入${count}张，可以融合`;
+        statusDot.className = 'w-2 h-2 rounded-full bg-blue-500';
+        fusionBtn.disabled = false;
+        fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
+    }
+}
+
+// ===================== 融合（无遮罩版本） =====================
+async function startFusion() {
+    if (images.length < 2) { showToast('请至少导入 2 张图像'); return; }
+    if (!isAuthenticated) { showToast('请先登录'); return; }
+
+    const loader = document.getElementById('fusion-loader');
+    const progressBar = document.getElementById('progress-bar');
+    const fusionContent = document.getElementById('preview-fusion-content');
+    const fusionContainer = document.getElementById('preview-fusion-container');
+    const statusText = document.getElementById('status-text');
+    const statusDot = document.getElementById('status-dot');
+    const fusionBtn = document.getElementById('btn-fusion');
+    const exportBtn = document.getElementById('btn-export');
+
+    // ===== 融合前：重置为等待状态，无遮罩 =====
+    fusionContent.innerHTML = `
+        <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
+        <p class="text-xs text-slate-700">融合处理中...</p>
+    `;
+    fusionContainer.classList.remove('fusion-glow');
+    document.getElementById('fusion-name').textContent = '融合中...';
+    
+    // 显示进度条
+    loader.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    statusText.textContent = `融合算法运行中 (${images.length}张)...`;
+    statusDot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+    fusionBtn.disabled = true;
+
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 8;
+        if (progress > 90) progress = 90;
+        progressBar.style.width = progress + '%';
+    }, 300);
+
+    try {
+        const imageData = images.map(img => img.dataUrl);
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: imageData })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            clearInterval(interval);
+            progressBar.style.width = '100%';
+
+            setTimeout(() => {
+                // ===== 融合后：显示融合图像，无遮罩 =====
+                loader.classList.add('hidden');
+                isFused = true;
+
+                fusionContent.innerHTML =
+                    `<img src="${result.fused_image}" class="w-full h-full object-contain" alt="融合结果" />`;
+                fusionContainer.classList.add('fusion-glow');
+                document.getElementById('fusion-name').textContent = `融合结果_${images.length}张`;
+
+                // 更新指标
+                const metrics = result.metrics;
+                const vals = [metrics.SSIM, metrics.MI, metrics.QABF, metrics.QM, metrics.QCB];
+                document.querySelectorAll('.metric-val').forEach((el, i) => {
+                    if (i < vals.length) {
+                        el.textContent = vals[i] || '--';
+                        el.classList.add('text-indigo-400');
+                    }
+                });
+
+                statusText.textContent = `融合完成 (${images.length}张)`;
+                statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
+                fusionBtn.disabled = false;
+                fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
+
+                // 启用导出按钮
+                exportBtn.disabled = false;
+                exportBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
+
+                showToast(`✅ ${images.length}张图像融合完成！`);
+            }, 500);
+        } else {
+            clearInterval(interval);
+            loader.classList.add('hidden');
+            showToast('❌ 融合失败: ' + (result.error || '未知错误'));
+            statusText.textContent = '融合失败';
+            statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+            fusionBtn.disabled = false;
+            fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
+            // 恢复等待状态
+            fusionContent.innerHTML = `
+                <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
+                <p class="text-xs text-slate-700">等待融合处理...</p>
+            `;
+            document.getElementById('fusion-name').textContent = '等待融合...';
+        }
+    } catch (error) {
+        clearInterval(interval);
+        loader.classList.add('hidden');
+        showToast('❌ 连接后端失败: ' + error.message);
+        statusText.textContent = '连接失败';
+        statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+        fusionBtn.disabled = false;
+        fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
+        // 恢复等待状态
+        fusionContent.innerHTML = `
+            <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
+            <p class="text-xs text-slate-700">等待融合处理...</p>
+        `;
+        document.getElementById('fusion-name').textContent = '等待融合...';
+    }
+}
+
+// ===================== 导出结果 =====================
+function exportResult() {
+    const content = document.getElementById('preview-fusion-content');
+    const img = content.querySelector('img');
+
+    if (!img) {
+        showToast('❌ 没有可导出的结果，请先执行融合');
+        return;
+    }
+
+    if (!img.src || img.src === '' || img.src === '#') {
+        showToast('❌ 融合结果图片无效');
+        return;
+    }
+
+    try {
+        const link = document.createElement('a');
+        const ts = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+        link.download = `fusion_result_${ts}.jpg`;
+        link.href = img.src;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('✅ 融合结果已导出');
+    } catch (e) {
+        showToast('❌ 导出失败: ' + e.message);
+        console.error('导出错误:', e);
+    }
+}
+
+// ===================== 重置 =====================
+function resetSystem() {
+    images = [];
+    selectedIndex = -1;
+    isFused = false;
+
+    document.getElementById('preview-raw-content').innerHTML =
+        '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请选择左侧图像进行预览</p>';
+    document.getElementById('preview-fusion-content').innerHTML =
+        '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon><p class="text-xs text-slate-700">等待融合处理...</p>';
+    document.getElementById('preview-fusion-container').classList.remove('fusion-glow');
+    document.getElementById('fusion-loader').classList.add('hidden');
+    document.getElementById('raw-name').textContent = '未选中图像';
+    document.getElementById('raw-dim').textContent = '-- x -- px';
+    document.getElementById('fusion-name').textContent = '等待融合...';
+    document.querySelectorAll('.metric-val').forEach(el => { el.textContent = '--';
+        el.classList.remove('text-indigo-400'); });
+    document.getElementById('btn-export').disabled = true;
+    document.getElementById('btn-export').className = "px-4 py-2 bg-slate-800 text-slate-500 rounded-lg flex items-center gap-2 transition-all font-medium cursor-not-allowed border border-slate-700";
+
+    renderImageList();
+    updateStatus();
+    showToast('系统已重置');
+}
+
+// ===================== 初始化 =====================
+renderImageList();
+updateStatus();
+
+// 确保融合预览区显示"等待融合处理..."（无遮罩）
+document.getElementById('preview-fusion-content').innerHTML =
+    '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon><p class="text-xs text-slate-700">等待融合处理...</p>';
+document.getElementById('fusion-loader').classList.add('hidden');
+
+if (!isAuthenticated) {
+    setTimeout(openAuthModal, 500);
+}
+</script>
+</body>
+</html>
