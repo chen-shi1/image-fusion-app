@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+test_output*.jpg
+.git/
+.gitignore
+*.md
