@@ -574,7 +574,7 @@ fileInput.addEventListener('change', async function(event) {
 
         renderImageList();
         updateStatus();
-        saveImagesToStorage();
+        
         if (images.length > 0) selectImage(0);
         this.value = '';
     } finally {
@@ -634,7 +634,7 @@ function removeSelected() {
     selectedIndex = -1;
     renderImageList();
     updateStatus();
-    saveImagesToStorage();
+    
     document.getElementById('preview-raw-content').innerHTML =
         '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请选择左侧图像进行预览</p>';
     document.getElementById('raw-name').textContent = '未选中图像';
@@ -824,7 +824,7 @@ renderImageList();
 updateStatus();
 
 // 恢复保存的图片
-restoreImagesFromStorage();
+
 
 document.getElementById('preview-fusion-content').innerHTML =
     '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon><p class="text-xs text-slate-700">等待融合处理...</p>';
