@@ -142,13 +142,11 @@
                 </div>
                 <div class="flex flex-col gap-2 group min-h-0">
                     <div class="flex-1 rounded-xl border border-slate-800 micro-img-placeholder flex items-center justify-center relative transition-all duration-700 min-h-[150px] overflow-hidden" id="preview-fusion-container">
-                        <!-- 默认显示等待状态 -->
                         <div class="w-full h-full flex flex-col items-center justify-center" id="preview-fusion-content">
                             <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
                             <p class="text-xs text-slate-700">等待融合处理...</p>
                         </div>
                         <div class="absolute top-2 left-2 px-2 py-1 bg-indigo-900/40 backdrop-blur rounded text-[10px] text-indigo-300 border border-indigo-500/30">融合增强结果</div>
-                        <!-- 进度条加载层 -->
                         <div id="fusion-loader" style="position:absolute;inset:0;background:rgba(15,23,42,0.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;">
                             <div class="w-48 h-1 bg-slate-800 rounded-full overflow-hidden mb-4">
                                 <div class="w-0 h-full bg-indigo-500 transition-all duration-300" id="progress-bar"></div>
@@ -403,15 +401,14 @@ function logoutUser() {
 
     images = [];
     selectedIndex = -1;
+    localStorage.removeItem('fusion_images');
     renderImageList();
     updateStatus();
 
-    // 重置融合预览区 - 只显示等待状态，不显示遮罩
     document.getElementById('preview-fusion-content').innerHTML =
         '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon><p class="text-xs text-slate-700">等待融合处理...</p>';
     document.getElementById('preview-fusion-container').classList.remove('fusion-glow');
     document.getElementById('fusion-name').textContent = '等待融合...';
-    // 确保加载遮罩隐藏
     document.getElementById('fusion-loader').style.display = 'none';
     document.querySelectorAll('.metric-val').forEach(el => { el.textContent = '--';
         el.classList.remove('text-indigo-400'); });
@@ -460,7 +457,7 @@ function showToast(message) {
     }, 3000);
 }
 
-// ===================== 图像管理 =====================
+// ===================== 图片管理 =====================
 let images = [];
 let selectedIndex = -1;
 let isFused = false;
@@ -470,7 +467,50 @@ function importImages() {
     document.getElementById('file-input').click();
 }
 
-// ===== 文件输入事件（只绑定一次） =====
+// ===== 保存图片到 localStorage =====
+function saveImagesToStorage() {
+    try {
+        const data = images.map(img => ({
+            name: img.name,
+            size: img.size,
+            color: img.color,
+            dataUrl: img.dataUrl
+        }));
+        localStorage.setItem('fusion_images', JSON.stringify(data));
+    } catch (e) {
+        console.warn('保存图片到 localStorage 失败:', e);
+    }
+}
+
+// ===== 从 localStorage 恢复图片 =====
+function restoreImagesFromStorage() {
+    try {
+        const saved = localStorage.getItem('fusion_images');
+        if (!saved) return false;
+        const savedImages = JSON.parse(saved);
+        if (!savedImages || savedImages.length === 0) return false;
+        
+        images = savedImages.map((img, index) => ({
+            id: index + 1,
+            name: img.name || '已恢复图像',
+            size: img.size || '--',
+            color: img.color || 'from-blue-900 to-indigo-950',
+            dataUrl: img.dataUrl
+        }));
+        
+        renderImageList();
+        updateStatus();
+        if (images.length > 0) selectImage(0);
+        console.log(`✅ 从 localStorage 恢复了 ${images.length} 张图片`);
+        return true;
+    } catch (e) {
+        console.warn('恢复图片失败:', e);
+        localStorage.removeItem('fusion_images');
+        return false;
+    }
+}
+
+// ===== 文件输入事件 =====
 const fileInput = document.getElementById('file-input');
 fileInput.addEventListener('change', async function(event) {
     if (this._processing) return;
@@ -534,6 +574,7 @@ fileInput.addEventListener('change', async function(event) {
 
         renderImageList();
         updateStatus();
+        saveImagesToStorage();
         if (images.length > 0) selectImage(0);
         this.value = '';
     } finally {
@@ -593,6 +634,7 @@ function removeSelected() {
     selectedIndex = -1;
     renderImageList();
     updateStatus();
+    saveImagesToStorage();
     document.getElementById('preview-raw-content').innerHTML =
         '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请选择左侧图像进行预览</p>';
     document.getElementById('raw-name').textContent = '未选中图像';
@@ -638,15 +680,13 @@ async function startFusion() {
     const fusionBtn = document.getElementById('btn-fusion');
     const exportBtn = document.getElementById('btn-export');
 
-    // ===== 融合前：显示等待状态，无遮罩 =====
     fusionContent.innerHTML = `
         <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
         <p class="text-xs text-slate-700">融合处理中...</p>
     `;
     fusionContainer.classList.remove('fusion-glow');
     document.getElementById('fusion-name').textContent = '融合中...';
-
-    // ===== 显示进度遮罩（只在此阶段显示） =====
+    
     loader.style.display = 'flex';
     progressBar.style.width = '0%';
     statusText.textContent = `融合算法运行中 (${images.length}张)...`;
@@ -675,17 +715,14 @@ async function startFusion() {
             progressBar.style.width = '100%';
 
             setTimeout(() => {
-                // ===== 融合完成：隐藏遮罩，显示图片 =====
                 loader.style.display = 'none';
                 isFused = true;
 
-                // 显示融合结果图片
                 fusionContent.innerHTML =
                     `<img id="fused-result-img" src="${result.fused_image}" class="w-full h-full object-contain" alt="融合结果" />`;
                 fusionContainer.classList.add('fusion-glow');
                 document.getElementById('fusion-name').textContent = `融合结果_${images.length}张`;
 
-                // 更新指标
                 const metrics = result.metrics;
                 const vals = [metrics.SSIM, metrics.MI, metrics.QABF, metrics.QM, metrics.QCB];
                 document.querySelectorAll('.metric-val').forEach((el, i) => {
@@ -700,7 +737,6 @@ async function startFusion() {
                 fusionBtn.disabled = false;
                 fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
 
-                // 启用导出按钮
                 exportBtn.disabled = false;
                 exportBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
 
@@ -714,12 +750,6 @@ async function startFusion() {
             statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
             fusionBtn.disabled = false;
             fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
-            // 恢复等待状态
-            fusionContent.innerHTML = `
-                <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
-                <p class="text-xs text-slate-700">等待融合处理...</p>
-            `;
-            document.getElementById('fusion-name').textContent = '等待融合...';
         }
     } catch (error) {
         clearInterval(interval);
@@ -729,12 +759,6 @@ async function startFusion() {
         statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
         fusionBtn.disabled = false;
         fusionBtn.className = "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20 font-medium";
-        // 恢复等待状态
-        fusionContent.innerHTML = `
-            <iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon>
-            <p class="text-xs text-slate-700">等待融合处理...</p>
-        `;
-        document.getElementById('fusion-name').textContent = '等待融合...';
         console.error('融合错误:', error);
     }
 }
@@ -758,7 +782,7 @@ function exportResult() {
         const link = document.createElement('a');
         const ts = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
         link.download = `fusion_result_${ts}.jpg`;
-        link.href = img.src;  // data:image/jpeg;base64,xxx
+        link.href = img.src;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -774,6 +798,7 @@ function resetSystem() {
     images = [];
     selectedIndex = -1;
     isFused = false;
+    localStorage.removeItem('fusion_images');
 
     document.getElementById('preview-raw-content').innerHTML =
         '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:image-not-supported-outline-rounded"></iconify-icon><p class="text-xs text-slate-700">请选择左侧图像进行预览</p>';
@@ -798,7 +823,9 @@ function resetSystem() {
 renderImageList();
 updateStatus();
 
-// 确保融合预览区显示"等待融合处理..."，无遮罩
+// 恢复保存的图片
+restoreImagesFromStorage();
+
 document.getElementById('preview-fusion-content').innerHTML =
     '<iconify-icon class="text-4xl text-slate-800 mb-2" icon="material-symbols:blur-on-rounded"></iconify-icon><p class="text-xs text-slate-700">等待融合处理...</p>';
 document.getElementById('fusion-loader').style.display = 'none';
