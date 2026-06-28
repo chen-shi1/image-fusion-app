@@ -8,10 +8,25 @@ from flask_cors import CORS
 from oct2py import Oct2Py
 
 app = Flask(__name__)
-CORS(app)
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+
+CORS(app, origins=[
+    'https://chen-shi1.github.io',
+    'http://chen-shi1.github.io',
+    'https://demo-system.bbroot.com',
+    'http://demo-system.bbroot.com',
+    'http://118.178.91.91',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000'
+], supports_credentials=True)
 
 print("🔄 启动 Octave...")
 oc = Oct2Py()
+
+print("📦 加载 Octave image 包...")
+oc.eval("pkg load image")
+print("✅ Octave image 包已加载")
+
 oc.addpath(os.path.dirname(os.path.abspath(__file__)))
 print("✅ Octave 就绪")
 
@@ -53,41 +68,18 @@ def fusion_endpoint():
         fused = oc.image_fusion_algorithm(octave_images)
         
         fused = np.array(fused)
-        print(f"📊 原始形状: {fused.shape}, 类型: {fused.dtype}")
-        print(f"📊 像素范围: min={fused.min()}, max={fused.max()}")
-        
-        # ===== 核心修复：正确处理 0-1 范围的浮点数 =====
-        if fused.dtype == np.float64 or fused.dtype == np.float32:
-            print("🔄 检测到浮点数，转换为 0-255 uint8")
-            # 方法1：直接乘以255
-            fused = (fused * 255).astype(np.uint8)
-            print(f"📊 转换后范围: min={fused.min()}, max={fused.max()}")
-        
-        # 如果还是 0-1 范围（可能被缩放了一次）
-        if fused.max() <= 1.0 and fused.dtype != np.uint8:
-            print("🔄 再次转换...")
-            fused = (fused * 255).astype(np.uint8)
-            print(f"📊 再次转换后范围: min={fused.min()}, max={fused.max()}")
-        
-        # 确保是 uint8
         if fused.dtype != np.uint8:
-            fused = fused.astype(np.uint8)
+            fused = np.clip(fused, 0, 255).astype(np.uint8)
         
-        print(f"📊 最终类型: {fused.dtype}, 范围: {fused.min()}-{fused.max()}")
+        print(f"📊 融合结果形状: {fused.shape}")
         
-        # ===== 保存测试 =====
         fused_bgr = cv2.cvtColor(fused, cv2.COLOR_RGB2BGR)
-        cv2.imwrite('test_output.jpg', fused_bgr)
-        print("✅ test_output.jpg 已保存")
         
-        # ===== 编码返回 =====
         ret, buffer = cv2.imencode('.jpg', fused_bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
         if not ret:
-            print("❌ 编码失败")
             return jsonify({"error": "图片编码失败"}), 500
         
         fused_base64 = base64.b64encode(buffer).decode('utf-8')
-        print(f"✅ Base64 长度: {len(fused_base64)}")
         
         return jsonify({
             "success": True,
